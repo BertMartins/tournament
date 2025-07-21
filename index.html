@@ -198,7 +198,57 @@
             showScreen('groups');
         }
 
+        
+        function createGroups() {
+            const participants = [...tournament.participants];
+            const groupStructure = calculateGroupStructure(participants.length);
+            const groupSize = groupStructure.playersPerGroup;
+            const numGroups = groupStructure.numGroups;
+            
+            tournament.groups = [];
+            
+            // Embaralhar participantes
+            for (let i = participants.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [participants[i], participants[j]] = [participants[j], participants[i]];
+            }
+            
+            // Criar grupos
+            for (let i = 0; i < numGroups; i++) {
+                const groupParticipants = participants.slice(i * groupSize, (i + 1) * groupSize);
+                const group = {
+                    id: i,
+                    name: `Grupo ${String.fromCharCode(65 + i)}`,
+                    participants: groupParticipants.map(name => ({
+                        name,
+                        points: 0,
+                        wins: 0,
+                        draws: 0,
+                        losses: 0,
+                        goalsFor: 0,
+                        goalsAgainst: 0
+                    })),
+                    matches: []
+                };
                 
+                // Criar partidas do grupo (todos contra todos)
+                for (let j = 0; j < groupParticipants.length; j++) {
+                    for (let k = j + 1; k < groupParticipants.length; k++) {
+                        group.matches.push({
+                            team1: groupParticipants[j],
+                            team2: groupParticipants[k],
+                            score1: null,
+                            score2: null,
+                            played: false
+                        });
+                    }
+                }
+                
+                tournament.groups.push(group);
+            }
+            
+            renderGroups();
+        }
 
         function renderGroups() {
             const container = document.getElementById('groups-container');
