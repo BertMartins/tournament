@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organizador de Torneios</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE',
+                        'primary-dark': '#4B4BC7'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .modal-backdrop {
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body class="bg-white dark:bg-gray-900 min-h-screen transition-colors duration-300">
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-800 dark:text-white mb-2">🏆 Organizador de Torneios</h1>
+            <p class="text-gray-600 dark:text-gray-300">Sistema de grupos e eliminatórias</p>
+        </header>
+
+        <!-- Configuração Inicial -->
+        <div id="setup-screen" class="max-w-md mx-auto">
+            <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6 shadow-lg">
+                <h2 class="text-2xl font-semibold text-gray-800 dark:text-white mb-4">Configurar Torneio</h2>
+                
+                <div class="mb-4">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">
+                        Número de Participantes
+                    </label>
+                    <input type="number" id="participants-count" min="6" max="32" value="8"
+                           class="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-lg 
+                                  bg-white dark:bg-gray-700 text-gray-800 dark:text-white
+                                  focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-gray-700 dark:text-gray-300 text-sm font-medium mb-2">
+                        Nomes dos Participantes
+                    </label>
+                    <div id="participants-inputs" class="space-y-2">
+                        <!-- Inputs serão gerados dinamicamente -->
+                    </div>
+                </div>
+
+                <button onclick="startTournament()" 
+                        class="w-full bg-primary hover:bg-primary-dark text-white font-semibold py-3 px-6 rounded-lg 
+                               transition-colors duration-200">
+                    Iniciar Torneio
+                </button>
+            </div>
+        </div>
+
+        <!-- Fase de Grupos -->
+        <div id="groups-screen" class="hidden">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-3xl font-bold text-gray-800 dark:text-white">Fase de Grupos</h2>
+                <button onclick="showGroupStandings()" 
+                        class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors">
+                    Ver Classificação
+                </button>
+            </div>
+            
+            <div id="groups-container" class="grid gap-6">
+                <!-- Grupos serão gerados aqui -->
+            </div>
+
+            <div class="text-center mt-8">
+                <button onclick="advanceToKnockout()" 
+                        class="bg-primary hover:bg-primary-dark text-white font-semibold py-3 px-8 rounded-lg 
+                               transition-colors duration-200">
+                    Avançar para Eliminatórias
+                </button>
+            </div>
+        </div>
+
+        <!-- Fase Eliminatória -->
+        <div id="knockout-screen" class="hidden">
+            <h2 class="text-3xl font-bold text-gray-800 dark:text-white mb-6 text-center">Fase Eliminatória</h2>
+            <div id="knockout-container">
+                <!-- Eliminatórias serão geradas aqui -->
+            </div>
+        </div>
+
+        <!-- Modal de Classificação -->
+        <div id="standings-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 modal-backdrop flex items-center justify-center z-50">
+            <div class="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold text-gray-800 dark:text-white">Classificação dos Grupos</h3>
+                    <button onclick="closeStandings()" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                        <span class="text-2xl">&times;</span>
+                    </button>
+                </div>
+                <div id="standings-content">
+                    <!-- Conteúdo da classificação -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Detectar tema escuro
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+
+        let tournament = {
+            participants: [],
+            groups: [],
+            knockoutMatches: [],
+            phase: 'setup'
+        };
+
+        // Gerar inputs para participantes
+        document.getElementById('participants-count').addEventListener('input', function() {
+            const count = parseInt(this.value) || 0;
+            const container = document.getElementById('participants-inputs');
+            container.innerHTML = '';
+            
+            // Mostrar informação sobre grupos que serão criados
+            if (count >= 6) {
+                const groupInfo = calculateGroupStructure(count);
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800';
+                infoDiv.innerHTML = `
+                    <p class="text-sm text-blue-700 dark:text-blue-300">
+                        <strong>${groupInfo.numGroups} grupos</strong> de <strong>${groupInfo.playersPerGroup} jogadores</strong> cada
+                    </p>
+                `;
+                container.appendChild(infoDiv);
+            }
+            
+            for (let i = 1; i <= count; i++) {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.placeholder = `Participante ${i}`;
+                input.value = `Jogador ${i}`;
+                input.className = 'w-full px-3 py-2 text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-800 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent';
+                container.appendChild(input);
+            }
+        });
+
+        // Função para calcular estrutura de grupos
+        function calculateGroupStructure(N) {
+            let playersPerGroup, numGroups;
+            
+            if (N % 4 === 0) {
+                playersPerGroup = 4;
+            } else if (N % 3 === 0) {
+                playersPerGroup = 3;
+            } else {
+                // Se não for divisível nem por 4 nem por 3, escolher o que tiver menos sobra
+                const remainder4 = N % 4;
+                const remainder3 = N % 3;
+                if (remainder4 <= remainder3) {
+                    playersPerGroup = 4;
+                } else {
+                    playersPerGroup = 3;
+                }
+            }
+            
+            numGroups = Math.floor(N / playersPerGroup);
+            return { numGroups, playersPerGroup };
+        }
+
+        // Gerar inputs iniciais
+        document.getElementById('participants-count').dispatchEvent(new Event('input'));
+
+        function startTournament() {
+            const inputs = document.querySelectorAll('#participants-inputs input');
+            const participants = Array.from(inputs).map(input => input.value.trim()).filter(name => name);
+            
+            if (participants.length < 6) {
+                showAlert('É necessário pelo menos 6 participantes!');
+                return;
+            }
+
+            tournament.participants = participants;
+            createGroups();
+            showScreen('groups');
+        }
+
+                
+
+        function renderGroups() {
+            const container = document.getElementById('groups-container');
+            container.className = `grid gap-6 md:grid-cols-${Math.min(tournament.groups.length, 2)}`;
+            container.innerHTML = '';
+            
+            tournament.groups.forEach(group => {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'bg-gray-50 dark:bg-gray-800 rounded-xl p-6 shadow-lg';
+                groupDiv.innerHTML = `
+                    <h3 class="text-xl font-semibold text-gray-800 dark:text-white mb-4">${group.name}</h3>
+                    <div class="space-y-3">
+                        ${group.matches.map((match, index) => `
+                            <div class="bg-white dark:bg-gray-700 p-4 rounded-lg border">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-medium text-gray-800 dark:text-white">${match.team1}</span>
+                                    <div class="flex items-center space-x-2">
+                                        <input type="number" min="0" max="20" placeholder="0"
+                                               class="w-12 px-2 py-1 text-center text-base border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-600 text-gray-800 dark:text-white"
+                                               onchange="updateScore(${group.id}, ${index}, 1, this.value)">
+                                        <span class="text-gray-600 dark:text-gray-400">x</span>
+                                        <input type="number" min="0" max="20" placeholder="0"
+                                               class="w-12 px-2 py-1 text-center text-base border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-600 text-gray-800 dark:text-white"
+                                               onchange="updateScore(${group.id}, ${index}, 2, this.value)">
+                                    </div>
+                                    <span class="font-medium text-gray-800 dark:text-white">${match.team2}</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                container.appendChild(groupDiv);
+            });
+        }
+
+        function updateScore(groupId, matchIndex, team, score) {
+            const match = tournament.groups[groupId].matches[matchIndex];
+            const scoreValue = parseInt(score) || 0;
+            
+            if (team === 1) {
+                match.score1 = scoreValue;
+            } else {
+                match.score2 = scoreValue;
+            }
+            
+            if (match.score1 !== null && match.score2 !== null) {
+                if (!match.played) {
+                    match.played = true;
+                    updateGroupStandings(groupId, match);
+                }
+            }
+        }
+
+        function updateGroupStandings(groupId, match) {
+            const group = tournament.groups[groupId];
+            const team1 = group.participants.find(p => p.name === match.team1);
+            const team2 = group.participants.find(p => p.name === match.team2);
+            
+            // Remover pontos da partida anterior se já foi jogada
+            team1.goalsFor += match.score1;
+            team1.goalsAgainst += match.score2;
+            team2.goalsFor += match.score2;
+            team2.goalsAgainst += match.score1;
+            
+            if (match.score1 > match.score2) {
+                team1.wins++;
+                team1.points += 3;
+                team2.losses++;
+            } else if (match.score1 < match.score2) {
+                team2.wins++;
+                team2.points += 3;
+                team1.losses++;
+            } else {
+                team1.draws++;
+                team1.points += 1;
+                team2.draws++;
+                team2.points += 1;
+            }
+            
+            // Ordenar grupo por pontos, depois por saldo de gols
+            group.participants.sort((a, b) => {
+                const pointsDiff = b.points - a.points;
+                if (pointsDiff !== 0) return pointsDiff;
+                return (b.goalsFor - b.goalsAgainst) - (a.goalsFor - a.goalsAgainst);
+            });
+        }
+
+        function showGroupStandings() {
+            const content = document.getElementById('standings-content');
+            content.innerHTML = tournament.groups.map(group => `
+                <div class="mb-6">
+                    <h4 class="text-lg font-semibold text-gray-800 dark:text-white mb-3">${group.name}</h4>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="border-b border-gray-200 dark:border-gray-600">
+                                    <th class="text-left text-gray-600 dark:text-gray-400 py-2">Pos</th>
+                                    <th class="text-left text-gray-600 dark:text-gray-400 py-2">Participante</th>
+                                    <th class="text-center text-gray-600 dark:text-gray-400 py-2">Pts</th>
+                                    <th class="text-center text-gray-600 dark:text-gray-400 py-2">V</th>
+                                    <th class="text-center text-gray-600 dark:text-gray-400 py-2">E</th>
+                                    <th class="text-center text-gray-600 dark:text-gray-400 py-2">D</th>
+                                    <th class="text-center text-gray-600 dark:text-gray-400 py-2">SG</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${group.participants.map((p, index) => `
+                                    <tr class="border-b border-gray-100 dark:border-gray-700 ${index < 2 ? 'bg-green-50 dark:bg-green-900/20' : ''}">
+                                        <td class="py-2 text-gray-800 dark:text-white">${index + 1}</td>
+                                        <td class="py-2 text-gray-800 dark:text-white font-medium">${p.name}</td>
+                                        <td class="py-2 text-center text-gray-800 dark:text-white font-bold">${p.points}</td>
+                                        <td class="py-2 text-center text-gray-600 dark:text-gray-300">${p.wins}</td>
+                                        <td class="py-2 text-center text-gray-600 dark:text-gray-300">${p.draws}</td>
+                                        <td class="py-2 text-center text-gray-600 dark:text-gray-300">${p.losses}</td>
+                                        <td class="py-2 text-center text-gray-600 dark:text-gray-300">${p.goalsFor - p.goalsAgainst}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.getElementById('standings-modal').classList.remove('hidden');
+        }
+
+        function closeStandings() {
+            document.getElementById('standings-modal').classList.add('hidden');
+        }
+
+        function advanceToKnockout() {
+            // Verificar se todas as partidas foram jogadas
+            const allMatchesPlayed = tournament.groups.every(group => 
+                group.matches.every(match => match.played)
+            );
+            
+            if (!allMatchesPlayed) {
+                showAlert('Todas as partidas da fase de grupos devem ser jogadas!');
+                return;
+            }
+            
+            // Coletar os 2 melhores de cada grupo
+            const qualifiedTeams = [];
+            tournament.groups.forEach(group => {
+                qualifiedTeams.push(...group.participants.slice(0, 2));
+            });
+            
+            createKnockoutStage(qualifiedTeams);
+            showScreen('knockout');
+        }
+
+        function createKnockoutStage(teams) {
+            tournament.knockoutMatches = [];
+            
+            // Embaralhar times qualificados
+            for (let i = teams.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [teams[i], teams[j]] = [teams[j], teams[i]];
+            }
+            
+            let currentRound = teams.map(team => team.name);
+            let roundNumber = 1;
+            const numGroups = tournament.groups.length;
+            
+            // Se tiver menos de 4 grupos (menos de 8 classificados), pula direto para semifinal
+            if (numGroups < 4 && currentRound.length === 4) {
+                // Criar diretamente as semifinais
+                const roundMatches = [];
+                for (let i = 0; i < currentRound.length; i += 2) {
+                    roundMatches.push({
+                        team1: currentRound[i],
+                        team2: currentRound[i + 1],
+                        score1: null,
+                        score2: null,
+                        winner: null,
+                        played: false
+                    });
+                }
+                
+                tournament.knockoutMatches.push({
+                    round: roundNumber,
+                    name: 'Semifinal',
+                    matches: roundMatches
+                });
+                
+                currentRound = [];
+                roundNumber++;
+                
+                // Criar final
+                tournament.knockoutMatches.push({
+                    round: roundNumber,
+                    name: 'Final',
+                    matches: [{
+                        team1: 'TBD',
+                        team2: 'TBD',
+                        score1: null,
+                        score2: null,
+                        winner: null,
+                        played: false
+                    }]
+                });
+            } else {
+                // Lógica normal para 4+ grupos (quartas, semi, final)
+                while (currentRound.length > 1) {
+                    const roundMatches = [];
+                    const nextRound = [];
+                    
+                    for (let i = 0; i < currentRound.length; i += 2) {
+                        if (i + 1 < currentRound.length) {
+                            roundMatches.push({
+                                team1: currentRound[i],
+                                team2: currentRound[i + 1],
+                                score1: null,
+                                score2: null,
+                                winner: null,
+                                played: false
+                            });
+                        } else {
+                            nextRound.push(currentRound[i]); // Bye
+                        }
+                    }
+                    
+                    tournament.knockoutMatches.push({
+                        round: roundNumber,
+                        name: getRoundName(roundMatches.length, numGroups),
+                        matches: roundMatches
+                    });
+                    
+                    currentRound = nextRound;
+                    roundNumber++;
+                }
+            }
+            
+            renderKnockoutStage();
+        }
+
+        function getRoundName(matchCount, numGroups) {
+            switch (matchCount) {
+                case 1: return 'Final';
+                case 2: return 'Semifinal';
+                case 4: return numGroups >= 4 ? 'Quartas de Final' : 'Semifinal';
+                case 8: return 'Oitavas de Final';
+                default: return `Rodada ${matchCount}`;
+            }
+        }
+
+        function renderKnockoutStage() {
+            const container = document.getElementById('knockout-container');
+            container.innerHTML = '';
+            
+            tournament.knockoutMatches.forEach((round, roundIndex) => {
+                const roundDiv = document.createElement('div');
+                roundDiv.className = 'mb-8';
+                roundDiv.innerHTML = `
+                    <h3 class="text-2xl font-semibold text-gray-800 dark:text-white mb-4 text-center">${round.name}</h3>
+                    <div class="grid gap-4 max-w-2xl mx-auto">
+                        ${round.matches.map((match, matchIndex) => `
+                            <div class="bg-gray-50 dark:bg-gray-800 p-6 rounded-xl shadow-lg">
+                                <div class="flex items-center justify-between">
+                                    <div class="text-center flex-1">
+                                        <div class="font-semibold text-gray-800 dark:text-white">${match.team1}</div>
+                                    </div>
+                                    <div class="flex items-center space-x-3 mx-6">
+                                        <input type="number" min="0" max="20" placeholder="0"
+                                               class="w-12 px-2 py-1 text-center text-base border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-600 text-gray-800 dark:text-white"
+                                               onchange="updateKnockoutScore(${roundIndex}, ${matchIndex}, 1, this.value)">
+                                        <span class="text-gray-600 dark:text-gray-400">x</span>
+                                        <input type="number" min="0" max="20" placeholder="0"
+                                               class="w-12 px-2 py-1 text-center text-base border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-600 text-gray-800 dark:text-white"
+                                               onchange="updateKnockoutScore(${roundIndex}, ${matchIndex}, 2, this.value)">
+                                    </div>
+                                    <div class="text-center flex-1">
+                                        <div class="font-semibold text-gray-800 dark:text-white">${match.team2}</div>
+                                    </div>
+                                </div>
+                                ${match.winner ? `<div class="text-center mt-3 text-green-600 dark:text-green-400 font-semibold">Vencedor: ${match.winner}</div>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                container.appendChild(roundDiv);
+            });
+        }
+
+        function updateKnockoutScore(roundIndex, matchIndex, team, score) {
+            const match = tournament.knockoutMatches[roundIndex].matches[matchIndex];
+            const scoreValue = parseInt(score) || 0;
+            
+            if (team === 1) {
+                match.score1 = scoreValue;
+            } else {
+                match.score2 = scoreValue;
+            }
+            
+            if (match.score1 !== null && match.score2 !== null && match.score1 !== match.score2) {
+                match.winner = match.score1 > match.score2 ? match.team1 : match.team2;
+                match.played = true;
+                
+                // Avançar vencedor para próxima rodada
+                advanceWinner(roundIndex, match.winner);
+                renderKnockoutStage();
+            }
+        }
+
+        function advanceWinner(roundIndex, winner) {
+            const nextRoundIndex = roundIndex + 1;
+            if (nextRoundIndex < tournament.knockoutMatches.length) {
+                const nextRound = tournament.knockoutMatches[nextRoundIndex];
+                const matchIndex = Math.floor(tournament.knockoutMatches[roundIndex].matches.findIndex(m => m.winner === winner) / 2);
+                const nextMatch = nextRound.matches[matchIndex];
+                
+                if (!nextMatch.team1 || nextMatch.team1 === 'TBD') {
+                    nextMatch.team1 = winner;
+                } else if (!nextMatch.team2 || nextMatch.team2 === 'TBD') {
+                    nextMatch.team2 = winner;
+                }
+            }
+        }
+
+        function showScreen(screen) {
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('groups-screen').classList.add('hidden');
+            document.getElementById('knockout-screen').classList.add('hidden');
+            document.getElementById(`${screen}-screen`).classList.remove('hidden');
+        }
+
+        function showAlert(message) {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 modal-backdrop flex items-center justify-center z-50';
+            modal.innerHTML = `
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+                    <p class="text-gray-700 dark:text-gray-300 mb-4">${message}</p>
+                    <div class="flex justify-end">
+                        <button class="px-4 py-2 bg-primary text-white hover:bg-primary-dark rounded transition-colors" onclick="this.closest('.fixed').remove()">OK</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+    </script>
+</body>
+</html>
